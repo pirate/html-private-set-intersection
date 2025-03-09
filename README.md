@@ -29,6 +29,8 @@ This allows you to build a whole new digital ontology for human "perspective". Y
 The goal now becomes how do you manage identity in this system so that pairs of people can trust each other enough to go through the PSI process?
 And ideally how do you *reward* them for doing that labor (without inviting copyright lawsuits).
 
+Also how do you collect, tag, curate, and swap bundles of this content between institutional servers (including [governments](https://archive-it.org/), [law enforcement](https://hunch.ly/), [lawyers](https://perma.cc/), [journalists](https://webrecorder.net/), [etc.](https://github.com/ArchiveBox/ArchiveBox)).
+
 ## Quickstart
 
 ```bash
@@ -55,7 +57,6 @@ open out.html
 ./psi_image.js --server --reveal-intersection --file version_a.png
 ./psi_image.js --client localhost:5995 --reveal_intersection --file version_b.png
 open ./psi_output.png
-
 
 # try the demo UI WebRTC P2P PSI In-Browser
 cd ui/
