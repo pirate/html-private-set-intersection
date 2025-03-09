@@ -4,6 +4,39 @@ const fs = require('fs');
 const path = require('path');
 const { program } = require('commander');
 const PSI = require('@openmined/psi.js');
+const crypto = require('crypto');
+
+// Create a hash-based redaction that is consistent for the same input
+function createConsistentRedaction(text, salt = 'psi-redaction-salt-8675309') {
+  // Use cache for consistent replacements
+  const cacheKey = text;
+  if (redactionCache.has(cacheKey)) {
+    return redactionCache.get(cacheKey);
+  }
+  
+  // Create a hash of the text + salt using SHA-256
+  const hash = crypto.createHash('sha256').update(text + salt).digest('hex');
+  
+  // Use the hash to generate a pseudorandom sequence of the same length
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  
+  // Generate a redaction of the same length as the original text
+  for (let i = 0; i < text.length; i++) {
+    // Use a different part of the hash for each character to improve randomness
+    const hashIndex = i % (hash.length - 1);
+    const value = parseInt(hash.substr(hashIndex, 2), 16);
+    const randomIndex = value % chars.length;
+    result += chars[randomIndex];
+  }
+  
+  // Store in cache for future use
+  redactionCache.set(cacheKey, result);
+  return result;
+}
+
+// Cache for redaction values to ensure consistent replacement
+const redactionCache = new Map();
 
 // CLI options
 program
@@ -339,8 +372,8 @@ async function runClient() {
               if (isInIntersection) {
                 console.log(line);
               } else {
-                // Replace with 'X' of the same length
-                console.log('X'.repeat(line.length));
+                // Replace with consistent hash-based redaction
+                console.log(createConsistentRedaction(line));
               }
             }
           });
@@ -364,8 +397,8 @@ async function runClient() {
                 if (isInIntersection) {
                   result += currentWord;
                 } else {
-                  // Replace with 'X' of the same length
-                  result += 'X'.repeat(currentWord.length);
+                  // Replace with consistent hash-based redaction
+                  result += createConsistentRedaction(currentWord);
                 }
                 tokenIdx++;
                 currentWord = '';
@@ -381,7 +414,8 @@ async function runClient() {
                 if (isInIntersection) {
                   result += char;
                 } else {
-                  result += 'X'; // Replace punctuation with X
+                  // Replace punctuation with consistent redaction
+                  result += createConsistentRedaction(char);
                 }
                 tokenIdx++;
               }
@@ -394,7 +428,8 @@ async function runClient() {
             if (isInIntersection) {
               result += currentWord;
             } else {
-              result += 'X'.repeat(currentWord.length);
+              // Replace with consistent hash-based redaction
+              result += createConsistentRedaction(currentWord);
             }
           }
           
@@ -409,7 +444,7 @@ async function runClient() {
             
             if (/\S/.test(char)) {
               const isInIntersection = indexSet.has(nonSpaceIdx);
-              result += isInIntersection ? char : 'X';
+              result += isInIntersection ? char : createConsistentRedaction(char);
               nonSpaceIdx++;
             } else {
               result += char; // Keep whitespace
