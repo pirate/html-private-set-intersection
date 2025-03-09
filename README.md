@@ -2,9 +2,13 @@
 
 > How multiple parties can collaborate to anonymize web content that's interspersed with PII.
 
+#### HTML-Based Intersection
 
-<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/a4662e25-788f-4688-8e1d-92ad8aafdc83" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/35b79cf8-7cd8-42de-8c1f-206c5faa30b6" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/cd18babd-afac-493c-b3e4-cd26923a958f" align="top"/>
+<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/a4662e25-788f-4688-8e1d-92ad8aafdc83" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/35b79cf8-7cd8-42de-8c1f-206c5faa30b6" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/cd18babd-afac-493c-b3e4-cd26923a958f" align="top"/>  
 
+#### Image-Based Intersection
+  
+<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/dc2241ad-16f9-4d21-9fad-06d463349c20" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/bf3527a9-5716-4ccd-b7dc-334703c22981" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/c72c3ce6-023f-42bc-9aa8-85e34d889f96" align="top"/>
 
 ## Pre-Requisites
 
