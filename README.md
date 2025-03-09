@@ -47,6 +47,16 @@ npm install
 open out.html
 ```
 
+## Threat Model
+
+Nodes should only attempt to anonymize with other *trusted* peers. While the PSI does help anonymize content most of the time, a malicious peer could contruct false images or HTML and use it to gradually reverse-engineer any content you send them.
+
+Want to de-anonymize another node with one screenshot? Use the hang-man attack. Send them 26 screenshots of the `facebook.com` that you construct by DOM editing the page to replace the logged in user's name with `aaaaaaaaaaaaaaa`, `bbbbbbbbbbbbbbbb`, `ccccccccccccccc`, `ddddddddddddd`, etc. you only need to do one for each letter because you'll start to see all matching letter immediately (like hangman but faster).
+
+<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/1e12edcb-3c7a-4223-ab0f-4cad575c4e6a" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/c1a52757-b6c5-400e-9fac-6912e6f8a4b0" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/f4e7b1e6-11ba-4fd7-a071-7393e2ccab9e" align="top"/>
+
+Mitigation: what if the server only releases a random subset of tiles, and only after you match a few and send back a proof that you have the original pixels does the server let you PSI test the next range. That way the server can at least try to block attempted fishing from malicious peers trying to reverse engineer content or de-anonymize their own captures.
+
 ## Further Reading
 
 - https://docs.monadical.com/06IRHuDgS8CKYvvKr04g7w
