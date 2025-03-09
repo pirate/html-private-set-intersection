@@ -67,6 +67,9 @@ node server.js &
 npm run dev
 ```
 
+![Screenshot 2025-03-09 at 12 24 21 AM Private Set Intersection](https://github.com/user-attachments/assets/c047bc88-c847-4f70-ae65-5d3945aecfc4)
+
+
 ## Threat Model
 
 Nodes should only attempt to anonymize with other *trusted* peers. The **output** of the PSI between two trusted peers is a result that is *then* safe to share with untrusted peers.
