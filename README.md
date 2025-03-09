@@ -16,9 +16,9 @@ See https://docs.sweeting.me/s/cookie-dilemma for background context.
 
 ## Pre-Requisites
 
-Two nodes that have both independently archived some page (e.g. a facebook post) while logged in with their respective accounts.
+Two nodes that have both independently archived some page (e.g. a facebook post) while logged in with their respective accounts (ideally around the same time, with the same browser, language, font settings, and light/dark mode).
 
-Their WARC/HTML captures contain the main content they were trying to capture (photos, comments, etc.), but it's mixed in with unsharable PII specific to their individual accounts (e.g. their name, profile picture, email, session tokens, private notifications, messages, etc.).
+Both WARC/HTML/PNG captures contain the main content they were trying to capture (photos, comments, etc.), but it's mixed in with unsharable PII specific to their individual accounts (e.g. their name, profile picture, email, session tokens, private notifications, recent DMs, etc.).
 
 ## The Goal
 
