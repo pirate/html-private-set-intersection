@@ -45,6 +45,11 @@ npm install
 # on node2 save the output as redacted html that can be viewed in a browser
 ./psi.js --client node1.local:5995 --file test2b.html --reveal-intersection --redact > out.html
 open out.html
+
+# find the intersection of images instead of text
+./psi_image.js --server --reveal-intersection --file version_a.png
+./psi_image.js --client localhost:5995 --reveal_intersection --file version_b.png
+open ./psi_output.png
 ```
 
 ## Threat Model
@@ -52,7 +57,7 @@ open out.html
 Nodes should only attempt to anonymize with other *trusted* peers. The **output** of the PSI between two trusted peers is a result that is *then* safe to share with untrusted peers.
 However the PSI process itself should never be attempted directly between *untrusted* peers, **especially for images**.
 
-**How does it work? The hang-man attack.** An adversary can send 26 screenshots of the `facebook.com` homepage with the logged-in user's name in the upper left replaced with all `aaaaaaaaaaaaaaa`, `bbbbbbbbbbbbbbbb`, `ccccccccccccccc`, `ddddddddddddd`, etc. After only 26 screenshots they can see what every letter in every position is, because they're looking for matches in parallel! It's incredibly easy compared to bruteforcing the entire name at once.
+**How does it work? The hang-man attack.** An adversary can send 26 screenshots of the `facebook.com` homepage with the logged-in user's name in the upper left replaced with all `aaaaaaaaaaaaaaa`, `bbbbbbbbbbbbbbbb`, `ccccccccccccccc`, `ddddddddddddd`, etc. After only 26 screenshots they can see what every letter in every position is, because they're looking for matches in parallel! It's incredibly easy compared to bruteforcing the entire name at once. It's even worse if the malicoius peer has any inside knowledge as to who the other peer might be, as this narrows down the search space and they can just spot-check specific values.
 
 <img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/1e12edcb-3c7a-4223-ab0f-4cad575c4e6a" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/c1a52757-b6c5-400e-9fac-6912e6f8a4b0" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/f4e7b1e6-11ba-4fd7-a071-7393e2ccab9e" align="top"/>
 
