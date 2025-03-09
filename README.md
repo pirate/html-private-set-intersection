@@ -49,13 +49,14 @@ open out.html
 
 ## Threat Model
 
-Nodes should only attempt to anonymize with other *trusted* peers. While the PSI does help anonymize content most of the time, a malicious peer could contruct false images or HTML and use it to gradually reverse-engineer any content you send them.
+Nodes should only attempt to anonymize with other *trusted* peers. The **output** of the PSI between two trusted peers is a result that is *then* safe to share with untrusted peers.
+However the PSI process itself should never be attempted directly between *untrusted* peers, **especially for images**.
 
-Want to de-anonymize another node with one screenshot? Use the hang-man attack. Send them 26 screenshots of the `facebook.com` that you construct by DOM editing the page to replace the logged in user's name with `aaaaaaaaaaaaaaa`, `bbbbbbbbbbbbbbbb`, `ccccccccccccccc`, `ddddddddddddd`, etc. you only need to do one for each letter because you'll start to see all matching letter immediately (like hangman but faster).
+**How does it work? The hang-man attack.** An adversary can send 26 screenshots of the `facebook.com` homepage with the logged-in user's name in the upper left replaced with all `aaaaaaaaaaaaaaa`, `bbbbbbbbbbbbbbbb`, `ccccccccccccccc`, `ddddddddddddd`, etc. After only 26 screenshots they can see what every letter in every position is, because they're looking for matches in parallel! It's incredibly easy compared to bruteforcing the entire name at once.
 
 <img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/1e12edcb-3c7a-4223-ab0f-4cad575c4e6a" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/c1a52757-b6c5-400e-9fac-6912e6f8a4b0" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/f4e7b1e6-11ba-4fd7-a071-7393e2ccab9e" align="top"/>
 
-Mitigation: what if the server only releases a random subset of tiles, and only after you match a few and send back a proof that you have the original pixels does the server let you PSI test the next range. That way the server can at least try to block attempted fishing from malicious peers trying to reverse engineer content or de-anonymize their own captures.
+Mitigation: paranoid peers can increase their tile sizes from 5px to ~200px to cover entire words & sentences so that this attack is much harder.
 
 ## Further Reading
 
