@@ -1,9 +1,7 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 const fs = require('fs');
 const path = require('path');
-const net = require('net');
-const http = require('http');
 const { program } = require('commander');
 const PSI = require('@openmined/psi.js');
 
@@ -16,7 +14,9 @@ program
   .option('-f, --file <path>', 'Path to file with data for PSI')
   .option('--fpr <rate>', 'False positive rate (default: 0.001)', '0.001')
   .option('--reveal-intersection', 'Reveal the actual intersection instead of just the size')
-  .option('--highlight', 'Output the full file with intersection lines highlighted in green, non-intersection in red')
+  .option('--highlight', 'Output the full file with intersection elements highlighted in green, non-intersection in red')
+  .option('--redact', 'Output the full file with non-intersection elements replaced by X characters of the same length')
+  .option('--split <mode>', 'Split mode: "line", "word", or "char" (default: "line")', 'line')
   .parse(process.argv);
 
 const options = program.opts();
@@ -33,11 +33,71 @@ if (!options.server && !options.client) {
 }
 
 // Read and process the file
-function readFileLines(filePath) {
+function readFileContent(filePath, splitMode) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    // Split by newlines and filter out empty lines
-    return content.split(/\r?\n/).filter(line => line.trim().length > 0);
+    
+    // Split the content based on the specified mode
+    switch (splitMode) {
+      case 'line':
+        // Split by newlines and filter out empty lines
+        return {
+          elements: content.split(/\r?\n/).filter(line => line.trim().length > 0),
+          originalContent: content,
+          splitMode
+        };
+      
+      case 'word':
+        // Split into words and punctuation treating each as separate tokens
+        const wordElements = [];
+        let currentWord = '';
+        
+        for (let i = 0; i < content.length; i++) {
+          const char = content[i];
+          
+          if (/[a-zA-Z0-9]/.test(char)) {
+            // Alphanumeric characters form words
+            currentWord += char;
+          } else {
+            // End current word if any
+            if (currentWord) {
+              wordElements.push(currentWord);
+              currentWord = '';
+            }
+            
+            // Add whitespace as a token (represented by space)
+            if (/\s/.test(char)) {
+              wordElements.push(' ');
+            } else {
+              // Add punctuation as individual tokens
+              wordElements.push(char);
+            }
+          }
+        }
+        
+        // Add final word if any
+        if (currentWord) {
+          wordElements.push(currentWord);
+        }
+        
+        return {
+          elements: wordElements,
+          originalContent: content,
+          splitMode
+        };
+      
+      case 'char':
+        // Split by individual characters, excluding whitespace
+        return {
+          elements: content.replace(/\s/g, '').split(''),
+          originalContent: content,
+          splitMode
+        };
+      
+      default:
+        console.error(`Invalid split mode: ${splitMode}`);
+        process.exit(1);
+    }
   } catch (err) {
     console.error(`Error reading file ${filePath}: ${err.message}`);
     process.exit(1);
@@ -47,87 +107,81 @@ function readFileLines(filePath) {
 // Run as server
 async function runServer() {
   const psi = await PSI();
-  const fileLines = readFileLines(options.file);
+  const { elements: fileElements } = readFileContent(options.file, options.split);
   const revealIntersection = !!options.revealIntersection;
   const server = psi.server.createWithNewKey(revealIntersection);
   
   console.error(`Server started on ${options.host}:${options.port}`);
-  console.error(`Loaded ${fileLines.length} elements from file`);
+  console.error(`Loaded ${fileElements.length} elements from file using '${options.split}' split mode`);
   console.error(`Reveal intersection: ${revealIntersection}`);
 
-  // Create HTTP server to handle PSI protocol
-  const httpServer = http.createServer(async (req, res) => {
-    if (req.method === 'GET' && req.url === '/setup') {
+  // Create Bun HTTP server
+  const bunServer = Bun.serve({
+    port: parseInt(options.port, 10),
+    hostname: options.host,
+    
+    async fetch(req) {
+      const url = new URL(req.url);
+      
       // Step 1: Send the server setup to the client
-      const numClientElements = parseInt(req.headers['x-num-elements'] || '100', 10);
-      const fpr = parseFloat(options.fpr);
-      
-      console.error(`Creating setup for client with ${numClientElements} elements (FPR: ${fpr})`);
-      
-      const serverSetup = server.createSetupMessage(
-        fpr,
-        numClientElements,
-        fileLines,
-        psi.dataStructure.GCS
-      );
-      
-      const serializedSetup = Buffer.from(serverSetup.serializeBinary());
-      
-      res.writeHead(200, {
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': serializedSetup.length
-      });
-      res.end(serializedSetup);
-      
-    } else if (req.method === 'POST' && req.url === '/request') {
-      // Step 2: Process client request
-      const chunks = [];
-      req.on('data', chunk => chunks.push(chunk));
-      
-      req.on('end', () => {
-        const requestData = Buffer.concat(chunks);
+      if (req.method === 'GET' && url.pathname === '/setup') {
+        const numClientElements = parseInt(req.headers.get('x-num-elements') || '100', 10);
+        const fpr = parseFloat(options.fpr);
         
+        console.error(`Creating setup for client with ${numClientElements} elements (FPR: ${fpr})`);
+        
+        const serverSetup = server.createSetupMessage(
+          fpr,
+          numClientElements,
+          fileElements,
+          psi.dataStructure.GCS
+        );
+        
+        const serializedSetup = Buffer.from(serverSetup.serializeBinary());
+        
+        return new Response(serializedSetup, {
+          headers: { 'Content-Type': 'application/octet-stream' }
+        });
+      } 
+      // Step 2: Process client request
+      else if (req.method === 'POST' && url.pathname === '/request') {
         try {
-          const clientRequest = psi.request.deserializeBinary(requestData);
+          const requestData = await req.arrayBuffer();
+          const clientRequest = psi.request.deserializeBinary(new Uint8Array(requestData));
           const serverResponse = server.processRequest(clientRequest);
           const serializedResponse = Buffer.from(serverResponse.serializeBinary());
           
-          res.writeHead(200, {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': serializedResponse.length
+          return new Response(serializedResponse, {
+            headers: { 'Content-Type': 'application/octet-stream' }
           });
-          res.end(serializedResponse);
-          
         } catch (error) {
           console.error('Error processing client request:', error);
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('Error processing request');
+          return new Response('Error processing request', { status: 500 });
         }
-      });
-      
-    } else {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not found');
+      } else {
+        return new Response('Not found', { status: 404 });
+      }
+    },
+    
+    error(err) {
+      console.error(`Server error: ${err.message}`);
+      return new Response('Server error', { status: 500 });
     }
   });
   
-  // Start the server
-  httpServer.listen(parseInt(options.port, 10), options.host);
-  httpServer.on('error', (error) => {
-    console.error(`Server error: ${error.message}`);
-    process.exit(1);
-  });
+  console.error(`Server is listening on ${bunServer.hostname}:${bunServer.port}`);
 }
 
 // Run as client
 async function runClient() {
   const [host, port] = options.client.split(':');
   const targetPort = parseInt(port || '5995', 10);
-  const fileLines = readFileLines(options.file);
+  const fileData = readFileContent(options.file, options.split);
+  const { elements: fileElements, originalContent, splitMode } = fileData;
   const revealIntersection = !!options.revealIntersection;
   
   console.error(`Connecting to server at ${host}:${targetPort}`);
-  console.error(`Loaded ${fileLines.length} elements from file`);
+  console.error(`Loaded ${fileElements.length} elements from file using '${splitMode}' split mode`);
   console.error(`Reveal intersection: ${revealIntersection}`);
   
   try {
@@ -135,72 +189,47 @@ async function runClient() {
     const client = psi.client.createWithNewKey(revealIntersection);
     
     // Step 1: Get the server setup
-    const setupResponse = await new Promise((resolve, reject) => {
-      const req = http.request({
-        host,
-        port: targetPort,
-        path: '/setup',
-        method: 'GET',
-        headers: {
-          'X-Num-Elements': fileLines.length.toString()
-        }
-      }, (res) => {
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            resolve(Buffer.concat(chunks));
-          } else {
-            reject(new Error(`HTTP Error: ${res.statusCode}`));
-          }
-        });
-      });
-      
-      req.on('error', reject);
-      req.end();
+    const setupResponse = await fetch(`http://${host}:${targetPort}/setup`, {
+      method: 'GET',
+      headers: {
+        'X-Num-Elements': fileElements.length.toString()
+      }
     });
+    
+    if (!setupResponse.ok) {
+      throw new Error(`HTTP Error: ${setupResponse.status}`);
+    }
+    
+    const setupData = await setupResponse.arrayBuffer();
     
     // Step 2: Create and send the client request
-    const clientRequest = client.createRequest(fileLines);
+    const clientRequest = client.createRequest(fileElements);
     const serializedRequest = clientRequest.serializeBinary();
     
-    const responseData = await new Promise((resolve, reject) => {
-      const req = http.request({
-        host,
-        port: targetPort,
-        path: '/request',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': serializedRequest.length
-        }
-      }, (res) => {
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            resolve(Buffer.concat(chunks));
-          } else {
-            reject(new Error(`HTTP Error: ${res.statusCode}`));
-          }
-        });
-      });
-      
-      req.on('error', reject);
-      req.write(serializedRequest);
-      req.end();
+    const responseResult = await fetch(`http://${host}:${targetPort}/request`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream'
+      },
+      body: serializedRequest
     });
     
+    if (!responseResult.ok) {
+      throw new Error(`HTTP Error: ${responseResult.status}`);
+    }
+    
+    const responseData = await responseResult.arrayBuffer();
+    
     // Step 3: Process the server's response
-    const serverSetup = psi.serverSetup.deserializeBinary(setupResponse);
-    const serverResponse = psi.response.deserializeBinary(responseData);
+    const serverSetup = psi.serverSetup.deserializeBinary(new Uint8Array(setupData));
+    const serverResponse = psi.response.deserializeBinary(new Uint8Array(responseData));
     
     if (revealIntersection) {
       // Get the actual intersection
       const intersection = client.getIntersection(serverSetup, serverResponse);
       
       // Create a map of the original elements with their indices in the original file
-      const originalElementsWithIndex = fileLines.map((line, index) => ({ line, originalIndex: index }));
+      const originalElementsWithIndex = fileElements.map((element, index) => ({ element, originalIndex: index }));
       
       // Create a set of indices that are in the intersection
       const indexSet = new Set(intersection);
@@ -211,21 +240,194 @@ async function runClient() {
         const RED = '\x1b[31m';
         const RESET = '\x1b[0m';
         
-        // Output the full file with highlighted lines
-        fileLines.forEach((line, index) => {
-          const isInIntersection = indexSet.has(index);
-          const color = isInIntersection ? GREEN : RED;
-          console.log(`${color}${line}${RESET}`);
-        });
+        // Handle different split modes for highlighting
+        if (splitMode === 'line') {
+          // Output the full file with highlighted lines
+          const lines = originalContent.split(/\r?\n/);
+          lines.forEach((line, lineIdx) => {
+            if (line.trim().length === 0) {
+              console.log(''); // Empty line
+            } else {
+              const elementIdx = lines.slice(0, lineIdx).filter(l => l.trim().length > 0).length;
+              const isInIntersection = indexSet.has(elementIdx);
+              const color = isInIntersection ? GREEN : RED;
+              console.log(`${color}${line}${RESET}`);
+            }
+          });
+        } else if (splitMode === 'word') {
+          // For word mode with punctuation as separate tokens
+          let result = '';
+          let tokenIdx = 0;
+          
+          // Reconstruct the text with highlighting
+          let currentWord = '';
+          for (let i = 0; i < originalContent.length; i++) {
+            const char = originalContent[i];
+            
+            if (/[a-zA-Z0-9]/.test(char)) {
+              // Build up a word
+              currentWord += char;
+            } else {
+              // Output any accumulated word
+              if (currentWord) {
+                const isInIntersection = indexSet.has(tokenIdx);
+                const color = isInIntersection ? GREEN : RED;
+                result += `${color}${currentWord}${RESET}`;
+                tokenIdx++;
+                currentWord = '';
+              }
+              
+              // Handle whitespace (represented by space token)
+              if (/\s/.test(char)) {
+                const isInIntersection = indexSet.has(tokenIdx);
+                const color = isInIntersection ? GREEN : RED;
+                // Don't color-code the actual whitespace character to avoid visual confusion
+                result += char;
+                tokenIdx++;
+              } else {
+                // Handle punctuation
+                const isInIntersection = indexSet.has(tokenIdx);
+                const color = isInIntersection ? GREEN : RED;
+                result += `${color}${char}${RESET}`;
+                tokenIdx++;
+              }
+            }
+          }
+          
+          // Output final word if any
+          if (currentWord) {
+            const isInIntersection = indexSet.has(tokenIdx);
+            const color = isInIntersection ? GREEN : RED;
+            result += `${color}${currentWord}${RESET}`;
+          }
+          
+          console.log(result);
+        } else if (splitMode === 'char') {
+          // For character mode, highlight each character
+          let result = '';
+          let nonSpaceIdx = 0;
+          
+          for (let i = 0; i < originalContent.length; i++) {
+            const char = originalContent[i];
+            
+            if (/\S/.test(char)) {
+              const isInIntersection = indexSet.has(nonSpaceIdx);
+              const color = isInIntersection ? GREEN : RED;
+              result += `${color}${char}${RESET}`;
+              nonSpaceIdx++;
+            } else {
+              result += char;
+            }
+          }
+          
+          console.log(result);
+        }
         
         console.error(`Found ${intersection.length} elements in the intersection (green)`);
-      } else {
+      } 
+      else if (options.redact) {
+        // Handle different split modes for redaction
+        if (splitMode === 'line') {
+          // Output the full file with redacted lines
+          const lines = originalContent.split(/\r?\n/);
+          lines.forEach((line, lineIdx) => {
+            if (line.trim().length === 0) {
+              console.log(''); // Empty line
+            } else {
+              const elementIdx = lines.slice(0, lineIdx).filter(l => l.trim().length > 0).length;
+              const isInIntersection = indexSet.has(elementIdx);
+              if (isInIntersection) {
+                console.log(line);
+              } else {
+                // Replace with 'X' of the same length
+                console.log('X'.repeat(line.length));
+              }
+            }
+          });
+        } else if (splitMode === 'word') {
+          // For word mode with punctuation as separate tokens
+          let result = '';
+          let tokenIdx = 0;
+          
+          // Reconstruct the text with redaction
+          let currentWord = '';
+          for (let i = 0; i < originalContent.length; i++) {
+            const char = originalContent[i];
+            
+            if (/[a-zA-Z0-9]/.test(char)) {
+              // Build up a word
+              currentWord += char;
+            } else {
+              // Output any accumulated word
+              if (currentWord) {
+                const isInIntersection = indexSet.has(tokenIdx);
+                if (isInIntersection) {
+                  result += currentWord;
+                } else {
+                  // Replace with 'X' of the same length
+                  result += 'X'.repeat(currentWord.length);
+                }
+                tokenIdx++;
+                currentWord = '';
+              }
+              
+              // Handle whitespace
+              if (/\s/.test(char)) {
+                tokenIdx++; // Count the whitespace token
+                result += char; // Always keep whitespace as is
+              } else {
+                // Handle punctuation
+                const isInIntersection = indexSet.has(tokenIdx);
+                if (isInIntersection) {
+                  result += char;
+                } else {
+                  result += 'X'; // Replace punctuation with X
+                }
+                tokenIdx++;
+              }
+            }
+          }
+          
+          // Output final word if any
+          if (currentWord) {
+            const isInIntersection = indexSet.has(tokenIdx);
+            if (isInIntersection) {
+              result += currentWord;
+            } else {
+              result += 'X'.repeat(currentWord.length);
+            }
+          }
+          
+          console.log(result);
+        } else if (splitMode === 'char') {
+          // For character mode, redact each character
+          let result = '';
+          let nonSpaceIdx = 0;
+          
+          for (let i = 0; i < originalContent.length; i++) {
+            const char = originalContent[i];
+            
+            if (/\S/.test(char)) {
+              const isInIntersection = indexSet.has(nonSpaceIdx);
+              result += isInIntersection ? char : 'X';
+              nonSpaceIdx++;
+            } else {
+              result += char; // Keep whitespace
+            }
+          }
+          
+          console.log(result);
+        }
+        
+        console.error(`Found ${intersection.length} elements in the intersection (not redacted)`);
+      }
+      else {
         // Filter to only include elements in the intersection
         const intersectionElements = originalElementsWithIndex
           .filter(item => indexSet.has(item.originalIndex))
           // Sort by original index to maintain original file order
           .sort((a, b) => a.originalIndex - b.originalIndex)
-          .map(item => item.line);
+          .map(item => item.element);
         
         // Output the intersection elements
         console.log(intersectionElements.join('\n'));

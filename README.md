@@ -20,13 +20,21 @@ For the client to produce a final modified version of the content that contains 
 git clone https://github.com/pirate/html-private-set-intersection.git
 cd html-private-set-intersection
 
+# make sure bun is installed
+curl -fsSL https://bun.sh/install | bash
+
+# install the npm dependencies
 npm install
 
-# on node1
-node psi.js --server --file test2a.html --reveal-intersection
+# on node1 run the server
+./psi.js --server --file test2a.html --reveal-intersection
 
-# on node2
-node psi.js --client node1.local:5995 --file test2b.html --reveal-intersection --highlight
+# on node2 run the client
+./psi.js --client node1.local:5995 --file test2b.html --reveal-intersection --highlight
+
+# on node2 save the output as redacted html that can be viewed in a browser
+./psi.js --client node1.local:5995 --file test2b.html --reveal-intersection --redact > out.html
+open out.html
 ```
 
 ## Further Reading
