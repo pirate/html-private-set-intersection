@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+// ./psi.js --server --file test2a.html --reveal-intersection
+// ./psi.js --client node1.local:5995 --file test2b.html --reveal-intersection --highlight
 
 const fs = require('fs');
 const path = require('path');

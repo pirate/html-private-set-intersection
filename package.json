@@ -12,6 +12,8 @@
   "dependencies": {
     "@openmined/psi.js": "^2.0.5",
     "bun": "^1.2.4",
-    "commander": "^13.1.0"
+    "commander": "^13.1.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.33.5"
   }
 }
