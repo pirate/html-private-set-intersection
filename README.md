@@ -26,6 +26,9 @@ For the client to produce a final modified version of the content that contains 
 
 This allows you to build a whole new digital ontology for human "perspective". You can start to cluster and intersect groups of people's perspective on websites and see how its content is rendered differently over time to different groups, without giving away the individual identity of everyone contributing to the public archive. This fixes the issue of traditional archiving tools struggling to archive private content (e.g. discord, facebook groups, whatsapp channels, etc.), because it requires login it used to force the archivist to burn their credentials everytime they share warcs. With good PSI tooling we can arrive at safe(r) anonymized versions and share them more freely, increasing the immediate and long term value of archiving.
 
+The goal now becomes how do you manage identity in this system so that pairs of people can trust each other enough to go through the PSI process?
+And ideally how do you *reward* them for doing that labor (without inviting copyright lawsuits).
+
 ## Quickstart
 
 ```bash
