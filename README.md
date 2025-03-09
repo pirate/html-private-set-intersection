@@ -24,6 +24,8 @@ Their WARC/HTML captures contain the main content they were trying to capture (p
 
 For the client to produce a final modified version of the content that contains only the intersection of the bytes that both nodes share, without ever revealing the cleartext to the server. The final copy should effectively be "anonymized" becuase it will exclude any bytes that are specific to either user (e.g. their PII). The client should be able to repeat this process to multiple servers, to further anonymize the content and should be able to be increasingly confident that nothing within will reveal their identity (hopefully) or their cookies/auth tokens (definitely).
 
+This allows you to build a whole new digital ontology for human "perspective". You can start to cluster and intersect groups of people's perspective on websites and see how its content is rendered differently over time to different groups, without giving away the individual identity of everyone contributing to the public archive. This fixes the issue of traditional archiving tools struggling to archive private content (e.g. discord, facebook groups, whatsapp channels, etc.), because it requires login it used to force the archivist to burn their credentials everytime they share warcs. With good PSI tooling we can arrive at safe(r) anonymized versions and share them more freely, increasing the immediate and long term value of archiving.
+
 ## Quickstart
 
 ```bash
