@@ -55,6 +55,13 @@ open out.html
 ./psi_image.js --server --reveal-intersection --file version_a.png
 ./psi_image.js --client localhost:5995 --reveal_intersection --file version_b.png
 open ./psi_output.png
+
+
+# try the demo UI WebRTC P2P PSI In-Browser
+cd ui/
+npm install
+node server.js &
+npm run dev
 ```
 
 ## Threat Model
