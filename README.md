@@ -22,7 +22,7 @@ Their WARC/HTML captures contain the main content they were trying to capture (p
 
 ## The Goal
 
-For the client to produce a final modified version of the content that contains only the intersection of the bytes that both nodes share, without ever revealing the cleartext to the server. The final copy should effectively be "anonymized" becuase it will exclude any bytes that are specific to either user (e.g. their PII). The client should be able to repeat this process to multiple servers, to further anonymize the content and should be able to be increasingly confident that nothing within will reveal their identity.
+For the client to produce a final modified version of the content that contains only the intersection of the bytes that both nodes share, without ever revealing the cleartext to the server. The final copy should effectively be "anonymized" becuase it will exclude any bytes that are specific to either user (e.g. their PII). The client should be able to repeat this process to multiple servers, to further anonymize the content and should be able to be increasingly confident that nothing within will reveal their identity (hopefully) or their cookies/auth tokens (definitely).
 
 ## Quickstart
 
