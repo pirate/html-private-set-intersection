@@ -63,6 +63,16 @@ However the PSI process itself should never be attempted directly between *untru
 
 Mitigation: paranoid peers can increase their tile sizes from 5px to ~200px to cover entire words & sentences so that this attack is much harder.
 
+#### Images
+
+Adversary generates images that look like the info they want to test for (e.g. your name, email, profile picture, most recent notification timestamp, etc.), if you confirm the presence of that info, they know it must be you and they can send you to jail for whistleblowing, copyright violation, etc.
+
+#### HTML
+
+Adversary tests for words in the html e.g. first name, last name, email. Or they can convince you to archive a malicious page that embeds some text that they later test for, this allows definitely proving the identity of the archivist without a shadow of a doubt.
+
+The solution to all of this is to just manually review the output, or have defense-in-depth using burner accounts for archiving and semi-automated review of PSI output before sharing.
+
 ## Further Reading
 
 - https://docs.monadical.com/06IRHuDgS8CKYvvKr04g7w
