@@ -1,6 +1,9 @@
-# Private Set Intersection for<br/>Web Content Anonymization
+# Private Set Intersection for Web Content Anonymization
 
 > How multiple parties can collaborate to anonymize web content that's interspersed with PII.
+
+
+<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/a4662e25-788f-4688-8e1d-92ad8aafdc83" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/35b79cf8-7cd8-42de-8c1f-206c5faa30b6" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/cd18babd-afac-493c-b3e4-cd26923a958f" align="top"/>
 
 
 ## Pre-Requisites
