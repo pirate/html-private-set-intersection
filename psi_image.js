@@ -5,6 +5,18 @@ const { program } = require('commander');
 const PSI = require('@openmined/psi.js');
 const { PNG } = require('pngjs');
 
+// Simple progress bar helper
+function printProgressBar(current, total, label) {
+  const barLength = 20;
+  const percent = current / total;
+  const filledLength = Math.round(percent * barLength);
+  const bar = '#'.repeat(filledLength) + '-'.repeat(barLength - filledLength);
+  process.stderr.write(`\r${label} [${bar}] ${(percent * 100).toFixed(1)}%`);
+  if (current === total) {
+    process.stderr.write('\n');
+  }
+}
+
 // CLI options
 program
   .option('-s, --server', 'Run as server')
@@ -13,7 +25,7 @@ program
   .option('-p, --port <port>', 'Port to bind server to', '5995')
   .option('-f, --file <path>', 'Path to PNG image file for PSI')
   .option('--fpr <rate>', 'False positive rate (default: 0.001)', '0.001')
-  .option('--reveal-intersection', 'Reveal the actual intersection (output final image with non-intersecting tiles replaced by averaged colors)')
+  .option('--reveal-intersection', 'Reveal the actual intersection (output final image with non-intersecting tiles smoothed)')
   .parse(process.argv);
 
 const options = program.opts();
@@ -29,32 +41,12 @@ if (!options.server && !options.client) {
 }
 
 /**
- * Computes the average color of a tile buffer (assumed to be tileSize×tileSize pixels, 4 bytes per pixel).
- * Returns an object {r, g, b, a}.
- */
-function averageTileColor(buffer) {
-  let sumR = 0, sumG = 0, sumB = 0, sumA = 0;
-  const numPixels = buffer.length / 4;
-  for (let i = 0; i < buffer.length; i += 4) {
-    sumR += buffer[i];
-    sumG += buffer[i + 1];
-    sumB += buffer[i + 2];
-    sumA += buffer[i + 3];
-  }
-  return {
-    r: Math.round(sumR / numPixels),
-    g: Math.round(sumG / numPixels),
-    b: Math.round(sumB / numPixels),
-    a: Math.round(sumA / numPixels)
-  };
-}
-
-/**
  * Reads a PNG image and divides it into 5×5 pixel tiles.
+ * For PSI, only the RGB channels are used (alpha is ignored).
  * Returns an object containing:
- * - elements: an array of strings encoding tile coordinates and raw pixel data (for PSI)
- * - png: the parsed PNG image
- * - tileInfo: array of tile metadata objects (tx, ty, index, tileBuffer)
+ * - elements: an array of strings encoding tile coordinates and raw RGB pixel data (for PSI)
+ * - png: the parsed PNG image (with original RGBA data)
+ * - tileInfo: array of tile metadata objects { tx, ty, index }
  * - width, height: dimensions of the image
  * - tilesAcross, tilesDown: number of tiles horizontally and vertically
  * - tileSize: the tile size (5)
@@ -72,35 +64,35 @@ function readImageTiles(filePath) {
     const tilesDown = Math.floor(height / tileSize);
     const totalTiles = tilesAcross * tilesDown;
     console.error(`Dividing image into ${tilesAcross} tiles across and ${tilesDown} tiles down (total ${totalTiles} tiles)`);
-
+    
     const elements = [];
     const tileInfo = [];
     let tileIndex = 0;
     
+    // Process each row and update progress
     for (let ty = 0; ty < tilesDown; ty++) {
-      console.error(`Processing tile row ${ty + 1} of ${tilesDown}`);
       for (let tx = 0; tx < tilesAcross; tx++) {
-        // Allocate buffer for the tile (5×5 pixels, 4 bytes per pixel)
-        const tileBuffer = Buffer.alloc(tileSize * tileSize * 4);
+        // Allocate buffer for PSI element (5×5 pixels, 3 bytes per pixel)
+        const psiBuffer = Buffer.alloc(tileSize * tileSize * 3);
         let bufferOffset = 0;
         for (let y = 0; y < tileSize; y++) {
           for (let x = 0; x < tileSize; x++) {
             const globalX = tx * tileSize + x;
             const globalY = ty * tileSize + y;
             const idx = (globalY * width + globalX) * 4;
-            tileBuffer[bufferOffset++] = png.data[idx];
-            tileBuffer[bufferOffset++] = png.data[idx + 1];
-            tileBuffer[bufferOffset++] = png.data[idx + 2];
-            tileBuffer[bufferOffset++] = png.data[idx + 3];
+            // Copy R, G, B only (skip alpha)
+            psiBuffer[bufferOffset++] = png.data[idx];
+            psiBuffer[bufferOffset++] = png.data[idx + 1];
+            psiBuffer[bufferOffset++] = png.data[idx + 2];
           }
         }
-        // Encode the tile's coordinate and its raw pixel data (as a hex string)
-        const tileHex = tileBuffer.toString('hex');
-        const elementString = `${tx},${ty}-${tileHex}`;
+        const psiHex = psiBuffer.toString('hex');
+        const elementString = `${tx},${ty}-${psiHex}`;
         elements.push(elementString);
-        tileInfo.push({ tx, ty, index: tileIndex, tileBuffer });
+        tileInfo.push({ tx, ty, index: tileIndex });
         tileIndex++;
       }
+      printProgressBar(ty + 1, tilesDown, "Tile extraction progress:");
     }
     
     console.error(`Extracted ${elements.length} tile elements from image.`);
@@ -109,6 +101,33 @@ function readImageTiles(filePath) {
     console.error(`Error reading PNG file ${filePath}: ${err.message}`);
     process.exit(1);
   }
+}
+
+/**
+ * Helper function that computes the average color of a tile from the PNG image.
+ * It iterates over all pixels in the tile located at (tx, ty).
+ */
+function getTileAverageColor(png, tx, ty, tileSize, width) {
+  let sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+  let count = 0;
+  for (let y = 0; y < tileSize; y++) {
+    for (let x = 0; x < tileSize; x++) {
+      const globalX = tx * tileSize + x;
+      const globalY = ty * tileSize + y;
+      const idx = (globalY * width + globalX) * 4;
+      sumR += png.data[idx];
+      sumG += png.data[idx + 1];
+      sumB += png.data[idx + 2];
+      sumA += png.data[idx + 3];
+      count++;
+    }
+  }
+  return {
+    r: Math.round(sumR / count),
+    g: Math.round(sumG / count),
+    b: Math.round(sumB / count),
+    a: Math.round(sumA / count)
+  };
 }
 
 // Server mode: set up the PSI server using the image tiles.
@@ -126,10 +145,8 @@ async function runServer() {
   const bunServer = Bun.serve({
     port: parseInt(options.port, 10),
     hostname: options.host,
-    
     async fetch(req) {
       const url = new URL(req.url);
-      
       if (req.method === 'GET' && url.pathname === '/setup') {
         const numClientElements = parseInt(req.headers.get('x-num-elements') || '100', 10);
         const fpr = parseFloat(options.fpr);
@@ -162,7 +179,6 @@ async function runServer() {
         return new Response('Not found', { status: 404 });
       }
     },
-    
     error(err) {
       console.error(`Server error: ${err.message}`);
       return new Response('Server error', { status: 500 });
@@ -220,35 +236,52 @@ async function runClient() {
     const serverResponse = psi.response.deserializeBinary(new Uint8Array(responseData));
     
     if (revealIntersection) {
-      // Get the intersection indices corresponding to tileInfo order.
+      // Get the intersection indices (corresponding to tileInfo order)
       const intersection = client.getIntersection(serverSetup, serverResponse);
       console.error(`Intersection contains ${intersection.length} tiles out of ${elements.length}`);
       
       const intersectionSet = new Set(intersection);
       
-      // For each non-intersecting tile, average the colors of its intersecting neighbors (up, down, left, right)
+      // Mark non-intersecting tiles in the PNG:
+      // For each tile not in the intersection, overwrite its pixels with the marker (black with alpha 0)
       for (let i = 0; i < tileInfo.length; i++) {
         if (!intersectionSet.has(i)) {
           const { tx, ty } = tileInfo[i];
-          const neighborIndices = [];
-          
-          if (tx > 0) {
-            neighborIndices.push((tx - 1) + ty * tilesAcross);
+          for (let y = 0; y < tileSize; y++) {
+            for (let x = 0; x < tileSize; x++) {
+              const globalX = tx * tileSize + x;
+              const globalY = ty * tileSize + y;
+              const idx = (globalY * width + globalX) * 4;
+              png.data[idx] = 0;
+              png.data[idx + 1] = 0;
+              png.data[idx + 2] = 0;
+              png.data[idx + 3] = 0; // marker alpha (non-intersecting)
+            }
           }
-          if (tx < tilesAcross - 1) {
-            neighborIndices.push((tx + 1) + ty * tilesAcross);
-          }
-          if (ty > 0) {
-            neighborIndices.push(tx + (ty - 1) * tilesAcross);
-          }
-          if (ty < tilesDown - 1) {
-            neighborIndices.push(tx + (ty + 1) * tilesAcross);
-          }
+        }
+        printProgressBar(i + 1, tileInfo.length, "Marking tiles progress:");
+      }
+      
+      // Smoothing pass:
+      // For each tile that is marked (non-intersecting), check its four cardinal neighbors.
+      // If a neighbor is intersecting (its top-left pixel alpha is 255), include its average color.
+      for (let i = 0; i < tileInfo.length; i++) {
+        const { tx, ty } = tileInfo[i];
+        const globalIdx = ((ty * tileSize) * width + tx * tileSize) * 4;
+        // Check if this tile is marked (non-intersecting)
+        if (png.data[globalIdx + 3] !== 255) {
+          const neighborCoords = [];
+          if (tx > 0) neighborCoords.push({ tx: tx - 1, ty });
+          if (tx < tilesAcross - 1) neighborCoords.push({ tx: tx + 1, ty });
+          if (ty > 0) neighborCoords.push({ tx, ty: ty - 1 });
+          if (ty < tilesDown - 1) neighborCoords.push({ tx, ty: ty + 1 });
           
           const neighborColors = [];
-          for (const nIndex of neighborIndices) {
-            if (intersectionSet.has(nIndex)) {
-              neighborColors.push(averageTileColor(tileInfo[nIndex].tileBuffer));
+          for (const { tx: ntx, ty: nty } of neighborCoords) {
+            const nGlobalIdx = ((nty * tileSize) * width + ntx * tileSize) * 4;
+            // If neighbor's top-left pixel has alpha 255, consider it intersecting
+            if (png.data[nGlobalIdx + 3] === 255) {
+              neighborColors.push(getTileAverageColor(png, ntx, nty, tileSize, width));
             }
           }
           
@@ -265,29 +298,29 @@ async function runClient() {
               r: Math.round(sumR / neighborColors.length),
               g: Math.round(sumG / neighborColors.length),
               b: Math.round(sumB / neighborColors.length),
-              a: Math.round(sumA / neighborColors.length)
+              a: 255
             };
           } else {
             avgColor = { r: 255, g: 255, b: 255, a: 255 };
           }
           
           // Fill the non-intersecting tile with the computed average color.
-          const { tx: tileX, ty: tileY } = tileInfo[i];
           for (let y = 0; y < tileSize; y++) {
             for (let x = 0; x < tileSize; x++) {
-              const globalX = tileX * tileSize + x;
-              const globalY = tileY * tileSize + y;
+              const globalX = tx * tileSize + x;
+              const globalY = ty * tileSize + y;
               const idx = (globalY * width + globalX) * 4;
               png.data[idx] = avgColor.r;
               png.data[idx + 1] = avgColor.g;
               png.data[idx + 2] = avgColor.b;
-              png.data[idx + 3] = avgColor.a;
+              png.data[idx + 3] = 255;
             }
           }
         }
+        printProgressBar(i + 1, tileInfo.length, "Smoothing pass progress:");
       }
       
-      console.error(`Processed non-intersecting tiles with neighbor-averaged colors.`);
+      console.error(`Smoothing pass complete: non-intersecting tiles have been replaced with neighbor-averaged colors.`);
       const outputBuffer = PNG.sync.write(png);
       const outputPath = path.join(process.cwd(), 'psi_output.png');
       fs.writeFileSync(outputPath, outputBuffer);
