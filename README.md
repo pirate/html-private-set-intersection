@@ -72,8 +72,8 @@ npm run dev
 
 ## Threat Model
 
-Nodes should only attempt to anonymize with other *trusted* peers. The **output** of the PSI between two trusted peers is a result that is *then* safe to share with untrusted peers.
-However the PSI process itself should never be attempted directly between *untrusted* peers, **especially for images**.
+Nodes should only attempt to anonymize with other *trusted* peers. The **output** of the PSI between two trusted peers is a result that is *then* safe(r) to share with untrusted peers. It doesn't protect against de-anonimization, but it does protect against people stealing your cookies / auth tokens fairly well.
+The PSI process itself should never be attempted directly between *untrusted* peers, **especially for images**.
 
 **How does it work? The hang-man attack.** An adversary can send 26 screenshots of the `facebook.com` homepage with the logged-in user's name in the upper left replaced with all `aaaaaaaaaaaaaaa`, `bbbbbbbbbbbbbbbb`, `ccccccccccccccc`, `ddddddddddddd`, etc. After only 26 screenshots they can see what every letter in every position is, because they're looking for matches in parallel! It's incredibly easy compared to bruteforcing the entire name at once. It's even worse if the malicoius peer has any inside knowledge as to who the other peer might be, as this narrows down the search space and they can just spot-check specific values. It gets harder the larger you make the tiles because eventually each tile contains multiple letters or words.
 
