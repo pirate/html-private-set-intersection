@@ -12,7 +12,7 @@ See https://docs.sweeting.me/s/cookie-dilemma for background context.
 
 #### Image-Based Intersection
   
-<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/dc2241ad-16f9-4d21-9fad-06d463349c20" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/bf3527a9-5716-4ccd-b7dc-334703c22981" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/7948ef5c-ff00-46d5-adeb-47debb859ad6" align="top"/>
+<img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/dc2241ad-16f9-4d21-9fad-06d463349c20" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/689c6fd6-9e41-4254-a79f-36f1bc187220" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/7948ef5c-ff00-46d5-adeb-47debb859ad6" align="top"/>
 
 ## Pre-Requisites
 
@@ -90,6 +90,8 @@ Adversary generates images that look like the info they want to test for (e.g. y
 Adversary tests for words in the html e.g. first name, last name, email. Or they can convince you to archive a malicious page that embeds some text that they later test for, this allows definitely proving the identity of the archivist without a shadow of a doubt.
 
 The solution to all of this is to just manually review the output, or have defense-in-depth using burner accounts for archiving and semi-automated review of PSI output before sharing.
+
+Beyond direct token attacks, there's also the issue of PSI being possible to de-anonymize by just checking for set intersection with another dataset. There is no technical defense against this, just defense-in-depth with the other techniques.
 
 ## Further Reading
 
