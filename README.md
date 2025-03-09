@@ -2,6 +2,10 @@
 
 > How multiple parties can collaborate to anonymize web content that's interspersed with PII.
 
+`#crawling`, `#scraping`, `#archiving`, `#digipres`, `#anonymization`, `#sanitization`, `#journalism`
+
+See https://docs.sweeting.me/s/cookie-dilemma for background context.
+
 #### HTML-Based Intersection
 
 <img width="30%" alt="version_a" src="https://github.com/user-attachments/assets/a4662e25-788f-4688-8e1d-92ad8aafdc83" align="top"/> + <img width="30%" alt="version_b" src="https://github.com/user-attachments/assets/35b79cf8-7cd8-42de-8c1f-206c5faa30b6" align="top"/> ➡️  <img width="30%" alt="output" src="https://github.com/user-attachments/assets/cd18babd-afac-493c-b3e4-cd26923a958f" align="top"/>  
@@ -19,7 +23,6 @@ Their WARC/HTML captures contain the main content they were trying to capture (p
 ## The Goal
 
 For the client to produce a final modified version of the content that contains only the intersection of the bytes that both nodes share, without ever revealing the cleartext to the server. The final copy should effectively be "anonymized" becuase it will exclude any bytes that are specific to either user (e.g. their PII). The client should be able to repeat this process to multiple servers, to further anonymize the content and should be able to be increasingly confident that nothing within will reveal their identity.
-
 
 ## Quickstart
 
