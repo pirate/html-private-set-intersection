@@ -1,0 +1,16 @@
+{
+  "name": "private-set-intersection",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@openmined/psi.js": "^2.0.5",
+    "commander": "^13.1.0"
+  }
+}

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Financial Model Dashboard</title>
+    <!-- Load rc-slider CSS from CDN -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/rc-slider@10.4.0/assets/index.css"
+    />
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+      #root {
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      // Use non‑minified (dev) builds for clearer errors.
+      import React, { useState, useEffect } from "https://esm.sh/react@18?dev";
+      // Import createRoot from react-dom/client (not react-dom)
+      import { createRoot } from "https://esm.sh/react-dom/client?dev";
+      // Import Recharts with react and react-dom marked as external.
+      import {
+        LineChart,
+        Line,
+        XAxis,
+        YAxis,
+        Tooltip,
+        Legend,
+        ResponsiveContainer,
+      } from "https://esm.sh/recharts@2.5.0?external=react,react-dom";
+      // Import rc-slider (version 10.4.0) normally.
+      import Slider, { Range } from "https://esm.sh/rc-slider@10.4.0?external=react,react-dom";
+
+      // Dashboard component implements the financial model dashboard.
+      const Dashboard = () => {
+        // ── Fixed Inputs (display only) ─────────────────────────────
+        const mortgagePaymentPerMonth = 4042;
+        const propertyTaxPerMonth = 708;
+        const insurancePerMonth = 188;
+        const utilitiesPerMonth = 300;
+        const totalOwningCostPerMonth = 5238;
+        const rentingCostPerMonth = 3900;
+        const capitalGainsTaxRate = 0.238; // 23.8%
+        const rothIRAWithdrawalPenalty = 0.16; // 16%
+
+        // ── Adjustable Inputs ────────────────────────────────────────
+        const [brokerageA_EarningsAPR, setBrokerageA_EarningsAPR] = useState(9);
+        const [brokerageB_EarningsAPR, setBrokerageB_EarningsAPR] = useState(12);
+        const [husbandIncome, setHusbandIncome] = useState(150000);
+        const [wifeIncome, setWifeIncome] = useState(100000);
+        const [housingScenario, setHousingScenario] = useState("own");
+
+        // ── Extra Monthly Credits/Debits ───────────────────────────────
+        const [extraEntries, setExtraEntries] = useState([]);
+        const [newEntryDescription, setNewEntryDescription] = useState("");
+        const [newEntryAmount, setNewEntryAmount] = useState(0);
+
+        const handleAddEntry = (e) => {
+          e.preventDefault();
+          if (newEntryDescription.trim() === "") return;
+          setExtraEntries([
+            ...extraEntries,
+            {
+              description: newEntryDescription,
+              amount: parseFloat(newEntryAmount),
+            },
+          ]);
+          setNewEntryDescription("");
+          setNewEntryAmount(0);
+        };
+
+        // ── Simulation Settings ───────────────────────────────────────
+        const simulationYears = 30;
+        const simulationMonths = simulationYears * 12;
+        const [simulationData, setSimulationData] = useState([]);
+        const [timeRange, setTimeRange] = useState([0, simulationMonths]);
+
+        useEffect(() => {
+          const rateA = brokerageA_EarningsAPR / 100;
+          const rateB = brokerageB_EarningsAPR / 100;
+          const monthlyFactorA = Math.pow(1 + rateA, 1 / 12) - 1;
+          const monthlyFactorB = Math.pow(1 + rateB, 1 / 12) - 1;
+
+          const husbandMonthly = husbandIncome / 12;
+          const wifeMonthly = wifeIncome / 12;
+          const baseIncome = husbandMonthly + wifeMonthly;
+
+          const extraMonthlyTotal = extraEntries.reduce(
+            (sum, entry) => sum + entry.amount,
+            0
+          );
+
+          const housingCost =
+            housingScenario === "own"
+              ? totalOwningCostPerMonth
+              : rentingCostPerMonth;
+
+          let data = [];
+          let cumulativeCash = 0;
+          let accountA = 100000; // Starting balance for Brokerage Account A.
+          let accountB = 287280; // Starting balance for Brokerage Account B.
+
+          for (let month = 0; month <= simulationMonths; month++) {
+            const netMonthlyCashFlow =
+              baseIncome + extraMonthlyTotal - housingCost;
+            cumulativeCash += netMonthlyCashFlow;
+
+            // Only invest surplus cash flow.
+            const contributionA = netMonthlyCashFlow > 0 ? netMonthlyCashFlow / 2 : 0;
+            const contributionB = netMonthlyCashFlow > 0 ? netMonthlyCashFlow / 2 : 0;
+
+            accountA = accountA * (1 + monthlyFactorA) + contributionA;
+            accountB = accountB * (1 + monthlyFactorB) + contributionB;
+
+            data.push({
+              month,
+              cumulativeCash,
+              accountA,
+              accountB,
+              netMonthlyCashFlow,
+            });
+          }
+          setSimulationData(data);
+        }, [
+          brokerageA_EarningsAPR,
+          brokerageB_EarningsAPR,
+          husbandIncome,
+          wifeIncome,
+          extraEntries,
+          housingScenario,
+        ]);
+
+        // Helper to format month numbers as YYYY-MM (starting in 2025)
+        const formatMonth = (month) => {
+          const year = Math.floor(month / 12) + 2025;
+          const m = (month % 12) + 1;
+          return `${year}-${m < 10 ? "0" + m : m}`;
+        };
+
+        // Filter the simulation data by the selected time range.
+        const filteredData = simulationData.filter(
+          (d) => d.month >= timeRange[0] && d.month <= timeRange[1]
+        );
+
+        return (
+          React.createElement("div", { style: { padding: "20px" } },
+            React.createElement("h1", null, "Financial Model Dashboard"),
+
+            // Fixed Inputs Display
+            React.createElement("section", null,
+              React.createElement("h2", null, "Fixed Inputs (For Reference)"),
+              React.createElement("ul", null,
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Mortgage Payment:"),
+                  " $4,042/mo (Principal + Interest on 30‑yr $555,000 @6.825%)"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Property Tax:"),
+                  " $708/mo"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Insurance:"),
+                  " $188/mo"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Utilities:"),
+                  " $300/mo"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Total Cost of Home Ownership:"),
+                  " $5,238/mo"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Renting Cost (incl. utilities):"),
+                  " $3,900/mo"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Capital Gains Tax Rate (2024 CA):"),
+                  " " + (capitalGainsTaxRate * 100) + "%"
+                ),
+                React.createElement("li", null,
+                  React.createElement("strong", null, "Roth IRA Early Withdrawal Penalty:"),
+                  " " + (rothIRAWithdrawalPenalty * 100) + "%"
+                )
+              )
+            ),
+
+            // Adjustable Inputs
+            React.createElement("section", null,
+              React.createElement("h2", null, "Adjustable Inputs"),
+              React.createElement("div", null,
+                React.createElement("label", null,
+                  "Brokerage Account A Earnings APR (%): ",
+                  React.createElement("input", {
+                    type: "range",
+                    min: "-50",
+                    max: "50",
+                    value: brokerageA_EarningsAPR,
+                    onChange: (e) =>
+                      setBrokerageA_EarningsAPR(parseFloat(e.target.value))
+                  }),
+                  " ",
+                  React.createElement("span", null, brokerageA_EarningsAPR + "%")
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", null,
+                  "Brokerage Account B Earnings APR (%): ",
+                  React.createElement("input", {
+                    type: "range",
+                    min: "-50",
+                    max: "50",
+                    value: brokerageB_EarningsAPR,
+                    onChange: (e) =>
+                      setBrokerageB_EarningsAPR(parseFloat(e.target.value))
+                  }),
+                  " ",
+                  React.createElement("span", null, brokerageB_EarningsAPR + "%")
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", null,
+                  "Husband’s Yearly Post‑Tax Income ($): ",
+                  React.createElement("input", {
+                    type: "range",
+                    min: "0",
+                    max: "350000",
+                    step: "1000",
+                    value: husbandIncome,
+                    onChange: (e) => setHusbandIncome(parseFloat(e.target.value))
+                  }),
+                  " ",
+                  React.createElement("span", null, "$" + husbandIncome)
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", null,
+                  "Wife’s Yearly Post‑Tax Income ($): ",
+                  React.createElement("input", {
+                    type: "range",
+                    min: "0",
+                    max: "350000",
+                    step: "1000",
+                    value: wifeIncome,
+                    onChange: (e) => setWifeIncome(parseFloat(e.target.value))
+                  }),
+                  " ",
+                  React.createElement("span", null, "$" + wifeIncome)
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", null,
+                  "Housing Scenario: ",
+                  React.createElement("select", {
+                    value: housingScenario,
+                    onChange: (e) => setHousingScenario(e.target.value)
+                  },
+                    React.createElement("option", { value: "own" }, "Owning (Cost: $5,238/mo)"),
+                    React.createElement("option", { value: "rent" }, "Renting (Cost: $3,900/mo)")
+                  )
+                )
+              )
+            ),
+
+            // Extra Monthly Credits/Debits
+            React.createElement("section", null,
+              React.createElement("h2", null, "Extra Monthly Credits/Debits"),
+              React.createElement("form", { onSubmit: handleAddEntry },
+                React.createElement("label", null,
+                  "Description: ",
+                  React.createElement("input", {
+                    type: "text",
+                    value: newEntryDescription,
+                    onChange: (e) => setNewEntryDescription(e.target.value),
+                    placeholder: "e.g., Groceries, Childcare, Consulting"
+                  })
+                ),
+                " ",
+                React.createElement("label", null,
+                  "Amount per month ($): ",
+                  React.createElement("input", {
+                    type: "number",
+                    value: newEntryAmount,
+                    onChange: (e) => setNewEntryAmount(e.target.value),
+                    placeholder: "e.g., -600 or +8000"
+                  })
+                ),
+                " ",
+                React.createElement("button", { type: "submit" }, "Add Entry")
+              ),
+              extraEntries.length > 0 &&
+              React.createElement("ul", null,
+                extraEntries.map((entry, index) =>
+                  React.createElement("li", { key: index },
+                    entry.description +
+                      ": " +
+                      (entry.amount >= 0 ? "+" : "") +
+                      entry.amount +
+                      " per month"
+                  )
+                )
+              )
+            ),
+
+            // Time Range Slider
+            React.createElement("section", null,
+              React.createElement("h2", null, "Simulation Time Range (in Months)"),
+              React.createElement(Range, {
+                min: 0,
+                max: simulationMonths,
+                defaultValue: [0, simulationMonths],
+                onChange: (range) => setTimeRange(range),
+                tipFormatter: (value) => `Month ${value}`
+              }),
+              React.createElement("p", null,
+                "Displaying data from Month " +
+                  timeRange[0] +
+                  " (" +
+                  formatMonth(timeRange[0]) +
+                  ") to Month " +
+                  timeRange[1] +
+                  " (" +
+                  formatMonth(timeRange[1]) +
+                  ")"
+              )
+            ),
+
+            // Simulation Chart
+            React.createElement("section", null,
+              React.createElement("h2", null, "Simulation Chart"),
+              React.createElement(ResponsiveContainer, { width: "100%", height: 400 },
+                React.createElement(LineChart, { data: filteredData },
+                  React.createElement(XAxis, {
+                    dataKey: "month",
+                    tickFormatter: (month) => formatMonth(month)
+                  }),
+                  React.createElement(YAxis, null),
+                  React.createElement(Tooltip, {
+                    labelFormatter: (label) => `Month: ${formatMonth(label)}`
+                  }),
+                  React.createElement(Legend, null),
+                  React.createElement(Line, {
+                    type: "monotone",
+                    dataKey: "accountA",
+                    stroke: "#8884d8",
+                    name: "Brokerage Account A",
+                    dot: false
+                  }),
+                  React.createElement(Line, {
+                    type: "monotone",
+                    dataKey: "accountB",
+                    stroke: "#82ca9d",
+                    name: "Brokerage Account B",
+                    dot: false
+                  }),
+                  React.createElement(Line, {
+                    type: "monotone",
+                    dataKey: "cumulativeCash",
+                    stroke: "#ff7300",
+                    name: "Cumulative Cash Flow",
+                    dot: false
+                  })
+                )
+              )
+            ),
+
+            // Current Balances Display
+            React.createElement("section", null,
+              React.createElement("h2", null, "Current Balances (at end of selected period)"),
+              filteredData.length > 0 &&
+              React.createElement("div", null,
+                React.createElement("p", null,
+                  "Month: " +
+                    formatMonth(filteredData[filteredData.length - 1].month)
+                ),
+                React.createElement("p", null,
+                  "Brokerage Account A: $" +
+                    filteredData[filteredData.length - 1].accountA.toFixed(2)
+                ),
+                React.createElement("p", null,
+                  "Brokerage Account B: $" +
+                    filteredData[filteredData.length - 1].accountB.toFixed(2)
+                ),
+                React.createElement("p", null,
+                  "Cumulative Cash Flow: $" +
+                    filteredData[filteredData.length - 1].cumulativeCash.toFixed(2)
+                )
+              )
+            )
+          )
+        );
+      };
+
+      const App = () => React.createElement(Dashboard);
+      // Use createRoot from react-dom/client.
+      createRoot(document.getElementById("root")).render(React.createElement(App));
+    </script>
+  </body>
+</html>
