@@ -29,6 +29,7 @@ program
   .option('-h, --host <host>', 'Host to bind server to', '0.0.0.0')
   .option('-p, --port <port>', 'Port to bind server to', '5995')
   .option('-f, --file <path>', 'Path to PNG image file for PSI')
+  .option('--tile-size <number>', 'Tile size (width and height in pixels)', '5')
   .option('--fpr <rate>', 'False positive rate (default: 0.001)', '0.001')
   .option('--reveal-intersection', 'Reveal the actual intersection (output final image with non-intersecting tiles smoothed)')
   .parse(process.argv);
@@ -46,14 +47,14 @@ if (!options.server && !options.client) {
 }
 
 /**
- * Reads a PNG image and divides it into 5×5 pixel tiles.
+ * Reads a PNG image and divides it into tiles of arbitrary size.
  *
- * For PSI, each element is a fixed‑width string constructed as:
+ * For PSI, each element is constructed as a fixed‑width string:
  *
  *    pad(tx,4) + pad(ty,4) + (for each pixel: pad(R,3)+pad(G,3)+pad(B,3))
  *
- * For example, a tile at (1440,900) with pixels such as (255,255,255),(0,0,0),…
- * becomes:
+ * For example, a tile at (1440,900) with pixels such as (255,255,255),(0,0,0), …
+ * becomes a string like:
  *
  *    "014400090025525525500000000000100100100..."
  *
@@ -63,7 +64,7 @@ if (!options.server && !options.client) {
  * - tileInfo: array of tile metadata objects { tx, ty, index }
  * - width, height: image dimensions
  * - tilesAcross, tilesDown: number of tiles horizontally and vertically
- * - tileSize: 5
+ * - tileSize: the tile size (from CLI)
  */
 function readImageTiles(filePath) {
   try {
@@ -73,12 +74,11 @@ function readImageTiles(filePath) {
     const height = png.height;
     console.error(`Loaded image ${filePath} with dimensions ${width}×${height}`);
     
-    const tileSize = 5;
-    // In our example we assume hardcoded dimensions (e.g. 1440×900)
+    const tileSize = parseInt(options.tileSize, 10) || 5;
     const tilesAcross = Math.floor(width / tileSize);
     const tilesDown = Math.floor(height / tileSize);
     const totalTiles = tilesAcross * tilesDown;
-    console.error(`Dividing image into ${tilesAcross} tiles across and ${tilesDown} tiles down (total ${totalTiles} tiles)`);
+    console.error(`Dividing image into ${tilesAcross} tiles across and ${tilesDown} tiles down (total ${totalTiles} tiles) with tile size ${tileSize}px`);
     
     const elements = [];
     const tileInfo = [];
@@ -161,36 +161,36 @@ async function runWithConcurrency(funcs, limit) {
 }
 
 /* ================== SERVER CODE ================== */
+// Precompute the entire PSI set for the server's image at startup.
 let serverElements, serverTileInfo, serverPNG, serverImageWidth;
 if (options.server) {
-  // Precompute the entire PSI set for the server's image.
   const { elements, png, tileInfo, width, height, tilesAcross, tilesDown, tileSize } = readImageTiles(options.file);
   serverElements = elements;
   serverTileInfo = tileInfo;
   serverPNG = png;
   serverImageWidth = width;
   
-  console.error(`Server precomputed ${elements.length} PSI elements for file ${options.file}`);
+  console.error(`Server precomputed ${elements.length} PSI elements for file ${options.file} using tile size ${tileSize}`);
   
-  // Start the Bun server. We remove the /setup endpoint entirely.
+  // Start the Bun server.
+  // Now, instead of a /setup endpoint, the server only handles individual tile requests:
+  // POST /get_tile_intersection?file=input_image.png&tile_idx=45
   const bunServer = Bun.serve({
     port: parseInt(options.port, 10),
     hostname: options.host,
     async fetch(req) {
       const url = new URL(req.url);
-      // Only handle POST /get_tile_intersection?file=...&tile_idx=...
       if (req.method === 'POST' && url.pathname === '/get_tile_intersection') {
         const tileIdx = parseInt(url.searchParams.get('tile_idx') || '-1', 10);
         if (tileIdx < 0 || tileIdx >= serverElements.length) {
           return new Response('Invalid tile index', { status: 400 });
         }
-        // Read the request body (the client's PSI element for this tile)
+        // Read the client's PSI element from the request body.
         const clientTile = await req.text();
-        // Compare with the precomputed server element.
         if (clientTile === serverElements[tileIdx]) {
-          // If they match, retrieve the raw tile bytes from the server's image.
+          // If matched, retrieve the raw tile bytes from the image.
           const { tx, ty } = serverTileInfo[tileIdx];
-          const tileSize = 5;
+          const tileSize = parseInt(options.tileSize, 10) || 5;
           const tileBuffer = Buffer.alloc(tileSize * tileSize * 4);
           let offset = 0;
           for (let y = 0; y < tileSize; y++) {
@@ -208,7 +208,6 @@ if (options.server) {
             headers: { 'Content-Type': 'application/octet-stream' }
           });
         } else {
-          // Not in the intersection; respond with no content.
           return new Response(null, { status: 204 });
         }
       } else {
@@ -227,30 +226,25 @@ if (options.server) {
 /* ================== CLIENT CODE ================== */
 if (options.client) {
   (async () => {
-    // The client uses the same shared parameters:
-    // tile_size = 5, image dimensions = 1440x900, etc.
+    // The client uses the same shared parameters.
     const { elements, png, tileInfo, width, height, tilesAcross, tilesDown, tileSize } = readImageTiles(options.file);
-    console.error(`Client loaded ${elements.length} tile elements from image ${options.file}`);
+    console.error(`Client loaded ${elements.length} tile elements from image ${options.file} using tile size ${tileSize}`);
     
     const [host, port] = options.client.split(':');
     const targetPort = parseInt(port || '5995', 10);
     
-    // We'll process each tile individually. Create an array of functions,
-    // each sending one POST request to /get_tile_intersection.
+    // For each tile, the client sends a POST request to /get_tile_intersection.
     const totalTiles = elements.length;
     const tileFunctions = [];
-    
     for (let i = 0; i < totalTiles; i++) {
       tileFunctions.push(async () => {
         const url = `http://${host}:${targetPort}/get_tile_intersection?file=${encodeURIComponent(options.file)}&tile_idx=${i}`;
-        // Send the PSI element (as a string) in the POST body.
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: elements[i]
         });
         if (res.status === 200) {
-          // Tile is in the intersection; retrieve its bytes.
           const tileBytes = await res.arrayBuffer();
           return { idx: i, intersect: true, tileBytes: Buffer.from(tileBytes) };
         } else {
@@ -259,16 +253,15 @@ if (options.client) {
       });
     }
     
-    // Process with a concurrency limit of 10.
+    // Process requests with a concurrency limit (10 at a time).
     const concurrencyLimit = 10;
     const results = await runWithConcurrency(tileFunctions, concurrencyLimit);
     
-    // Build a set of tile indices that are in the intersection.
+    // Update the client's PNG data for intersecting tiles.
     const intersectionSet = new Set();
     for (const r of results) {
       if (r.intersect) {
         intersectionSet.add(r.idx);
-        // For intersecting tiles, update the client's png data with the received tile bytes.
         const { tx, ty } = tileInfo[r.idx];
         let offset = 0;
         for (let y = 0; y < tileSize; y++) {
@@ -283,7 +276,7 @@ if (options.client) {
           }
         }
       } else {
-        // Mark non-intersecting tile by setting all its pixels to (0,0,0,0)
+        // Mark non-intersecting tile.
         const { tx, ty } = tileInfo[r.idx];
         for (let y = 0; y < tileSize; y++) {
           for (let x = 0; x < tileSize; x++) {
@@ -303,7 +296,6 @@ if (options.client) {
     console.error(`Total intersection: ${intersectionSet.size} tiles out of ${totalTiles}`);
     
     // --- Smoothing Pass ---
-    // For each non-intersecting tile (alpha != 255 in its top-left pixel), average its 4 neighbors.
     for (let i = 0; i < tileInfo.length; i++) {
       const { tx, ty } = tileInfo[i];
       const globalIdx = ((ty * tileSize) * width + tx * tileSize) * 4;
